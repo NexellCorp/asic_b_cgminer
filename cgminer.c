@@ -1205,6 +1205,27 @@ static char *set_sched_stop(const char *arg)
 	return set_schedtime(arg, &schedstop);
 }
 
+static char *set_sched_stop2(const char *arg)
+{
+	struct timeval now;
+	struct tm *tm;
+
+	long int tm_min;
+	long int delay_min = strtoul(arg, NULL, 10);
+	cgtime(&now);
+	const time_t tmp_time_ = now.tv_sec;
+	tm = localtime(&tmp_time_);
+
+	tm_min = tm->tm_min + delay_min;
+	schedstop.tm.tm_min = tm_min%60;
+	schedstop.tm.tm_hour = (tm->tm_hour + (tm_min/60))%24;
+
+	schedstop.enable = true;
+	return NULL;
+
+	return set_schedtime(arg, &schedstop);
+}
+
 static char *opt_set_sharelog;
 static char* set_sharelog(char *arg)
 {
@@ -2221,6 +2242,9 @@ static struct opt_table opt_config_table[] = {
 	OPT_WITH_CBARG("--sched-stop",
 		     set_sched_stop, NULL, &opt_set_sched_stop,
 		     "Set a time of day in HH:MM to stop mining (will quit without a start time)"),
+	OPT_WITH_CBARG("--delay-stop",
+		     set_sched_stop2, NULL, &opt_set_sched_stop,
+		     "Set timeout minutes to stop mining (will quit after minutes)"),
 	OPT_WITH_CBARG("--sharelog",
 		     set_sharelog, NULL, &opt_set_sharelog,
 		     "Append share log to file"),

@@ -9,8 +9,8 @@
 
 #include "dm_compat.h"
 
-#define MAX_CHIP_NUM						(68)
-#define MAX_CHAIN_NUM						(3)
+#define MAX_CHIP_NUM						(76)
+#define MAX_CHAIN_NUM						(2)
 #define MAX_CORE_NUM						(32)
 
 #define MAX_CORES						(MAX_CHIP_NUM * MAX_CORE_NUM)
@@ -43,7 +43,7 @@
 
 #define USE_BISTMASK
 //#define USE_AUTONONCE
-#define USE_AUTOCMD0A
+//#define USE_AUTOCMD0A
 
 #define WEAK_CHIP_THRESHOLD 5
 #define BROKEN_CHIP_THRESHOLD 5

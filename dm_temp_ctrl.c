@@ -51,7 +51,7 @@ void dm_tempctrl_get_defcfg(c_temp_cfg *p_cfg)
 	p_cfg->tmp_thr_hi	= 95;
 	p_cfg->tmp_thr_warn	= 105;
 	p_cfg->tmp_thr_pd	= 115;
-	p_cfg->tmp_exp_time	= 2000; // 2s
+	p_cfg->tmp_exp_time	= 4000; // 2s
 }
 
 
@@ -92,6 +92,13 @@ static void dm_tempctrl_get_chain_temp(int *chip_temp, c_temp *chain_temp)
 	int compr_desc(const void *a, const void *b) {
 		return (*(int*)b - *(int*)a);
 	}
+
+	if(g_chip_num == 1) {
+		chain_temp->tmp_hi = chip_temp[0];
+		chain_temp->tmp_lo = chip_temp[0];
+		chain_temp->tmp_avg = chip_temp[0];
+		return;
+	}
 	/* Sort descending */
 	qsort(chip_temp, g_chip_num, sizeof(int), compr_desc);
 
@@ -128,6 +135,7 @@ static void dm_tempctrl_get_chain_temp(int *chip_temp, c_temp *chain_temp)
  * Return:	device temperature state
  ******************************************************************************/
 
+static int chip_temp[MCOMPAT_CONFIG_MAX_CHIP_NUM];
 uint32_t dm_tempctrl_update_chain_temp(int chain_id)
 {
 	uint32_t *tstatus = &g_temp_status[chain_id];
@@ -147,7 +155,6 @@ uint32_t dm_tempctrl_update_chain_temp(int chain_id)
 	if (!mcompat_get_chain_temp(chain_id, &chain_temp))
 		applog(LOG_ERR, "chain%d: failed to read chain temperature", chain_id);
 #else
-	int chip_temp[MCOMPAT_CONFIG_MAX_CHIP_NUM];
 	mcompat_get_chip_temp(chain_id, chip_temp);
 	dm_tempctrl_get_chain_temp(chip_temp, &chain_temp);
 #endif

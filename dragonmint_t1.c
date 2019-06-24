@@ -823,8 +823,10 @@ bool T1_SetT1PLLClock(struct T1_chain *t1, int pllClkIdx, int chip_id)
 	memcpy(temp_reg, default_reg[pllClkIdx], REG_LENGTH);
 
 	if (!mcompat_cmd_write_register(cid, chip_id, temp_reg, REG_LENGTH)) {
-		applog(LOG_WARNING, "Failed to set PLL Lv.%d on T1 %d in T1_SetT1PLLClock", pllClkIdx, cid);
-		return false;
+		if (!mcompat_cmd_write_register(cid, chip_id, temp_reg, REG_LENGTH)) {
+			applog(LOG_WARNING, "Failed to set PLL Lv.%d on T1 %d in T1_SetT1PLLClock", pllClkIdx, cid);
+			return false;
+		}
 	}
 	if (chip_id) {
 		applog(LOG_NOTICE, "T1 %d chip %d PLL set to %d %d MHz", cid, chip_id,
@@ -1013,6 +1015,7 @@ bool set_work(struct T1_chain *t1, uint8_t chip_id, struct work *work, uint8_t q
 	if (!mcompat_cmd_write_job(cid, chip_id, jobdata, JOB_LENGTH))
 	{
 		/* give back work */
+		applog(LOG_ERR, "%d: failed to set work for chip %d.%d", cid, chip_id, job_id);
 		free_work(work);
 		applog(LOG_ERR, "%d: failed to set work for chip %d.%d", cid, chip_id, job_id);
 		disable_chip(t1, chip_id);

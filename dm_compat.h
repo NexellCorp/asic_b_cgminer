@@ -341,6 +341,7 @@ double mcompat_get_average_volt(int *volt, int size);
 #define PLATFORM_ZYNQ_HUB_G19   (0x04)
 #define PLATFORM_SOC            (0x10)
 #define PLATFORM_ORANGE_PI      (0x20)
+#define PLATFORM_NEXELL_SPI     (0x30)
 
 #define SPI_SPEED_390K          (0)
 #define SPI_SPEED_781K          (1)
@@ -1450,6 +1451,24 @@ bool opi_chain_power_down_all(void);
 
 void opi_set_spi_speed(unsigned char chain_id, int index);
 
+/* DRV_NEXELL */
+
+void init_nx_gpio(int chain_num);
+void exit_nx_gpio(int chain_num);
+
+void nx_set_power_en(unsigned char chain_id, int val);
+
+void nx_set_start_en(unsigned char chain_id, int val);
+
+bool nx_set_reset(unsigned char chain_id, int val);
+
+void nx_set_led(unsigned char chain_id, int val);
+
+int nx_get_plug(unsigned char chain_id);
+
+bool nx_set_vid(unsigned char chain_id, int vid);
+
+void nx_set_spi_speed(unsigned char chain_id, int index);
 
 /* DRV_SPI */
 
@@ -1546,6 +1565,31 @@ bool opi_cmd_read_write_reg0d(unsigned char chain_id, unsigned char chip_id, uns
 bool opi_cmd_read_result(unsigned char chain_id, unsigned char chip_id, unsigned char *res, int len);
 
 bool opi_cmd_write_job(unsigned char chain_id, unsigned char chip_id, unsigned char *job, int len);
+
+
+/* NEXELL_CMD */
+
+bool init_nx_cmd(int chain_num);
+
+bool exit_nx_cmd(int chain_num);
+
+bool nx_cmd_reset(unsigned char chain_id, unsigned char chip_id, unsigned char *in, unsigned char *out);
+
+int nx_cmd_bist_start(unsigned char chain_id, unsigned char chip_id);
+
+bool nx_cmd_bist_collect(unsigned char chain_id, unsigned char chip_id);
+
+bool nx_cmd_bist_fix(unsigned char chain_id, unsigned char chip_id);
+
+bool nx_cmd_write_register(unsigned char chain_id, unsigned char chip_id, unsigned char *reg, int len);
+
+bool nx_cmd_read_register(unsigned char chain_id, unsigned char chip_id, unsigned char *reg, int len);
+
+bool nx_cmd_read_write_reg0d(unsigned char chain_id, unsigned char chip_id, unsigned char *in, int len, unsigned char *out);
+
+bool nx_cmd_read_result(unsigned char chain_id, unsigned char chip_id, unsigned char *res, int len);
+
+bool nx_cmd_write_job(unsigned char chain_id, unsigned char chip_id, unsigned char *job, int len);
 
 
 /* SPI_CMD */
@@ -1750,6 +1794,7 @@ struct spi_ctx {
 	struct spi_config config;
 };
 
+int nx_spi_xfer(struct spi_ctx *nx_spi, uint8_t *tx_buf, uint8_t tx_len, uint8_t *rx_buf, uint8_t rx_len);
 
 void opi_spi_init(void);
 

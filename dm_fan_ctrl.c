@@ -113,7 +113,7 @@ void dm_fanctrl_set_fan_speed(char speed)
 
 	if (speed != g_fan_cfg.fan_speed) {
 		g_fan_cfg.fan_speed = speed;
-		mcompat_fan_speed_set(0, g_fan_cfg.fan_speed);   // fan id is ignored
+//		mcompat_fan_speed_set(0, g_fan_cfg.fan_speed);   // fan id is ignored
 		applog(LOG_ERR, "fan speed set to %d", g_fan_cfg.fan_speed);
 	}
 }

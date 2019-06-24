@@ -233,6 +233,7 @@ static bool prechain_detect(struct T1_chain *t1, int idxpll)
 	if (!t1_set_pll(t1, CMD_ADDR_BROADCAST, pll_lv_to_setvid))
 		return false;
 
+#if 0
 	/* Set voltage down at this point to avoid massive power draw as we
 	 * increase frequency */
 	if (!opt_T1auto && opt_T1VID[chain_id]) {
@@ -244,16 +245,19 @@ static bool prechain_detect(struct T1_chain *t1, int idxpll)
 		t1->iVid = mcompat_find_chain_vid(chain_id, t1->num_active_chips,
 						  STARTUP_VID, opt_T1Vol[chain_id]);
 	}
+#endif
 
 	if (!t1_set_pll(t1, CMD_ADDR_BROADCAST, idxpll))
 		return false;
 
+#if 0
 	/* Now fine tune voltage to the target level as voltage will have
 	 * changed due to changing frequency */
 	if (opt_T1auto || !opt_T1VID[chain_id]) {
 		t1->iVid = mcompat_find_chain_vid(chain_id, t1->num_active_chips,
 						  t1->iVid, opt_T1Vol[chain_id]);
 	}
+#endif
 
 	/* Read chip voltages */
 	get_voltages(t1);
@@ -515,7 +519,7 @@ static bool detect_T1_chain(void)
 	// reinit platform with real chain number and chip number
 	applog(LOG_NOTICE, "platform re-init: chain_num(%d), chip_num(%d)", chain_num, chip_num);
 	sys_platform_exit();
-	sys_platform_init(PLATFORM_ZYNQ_HUB_G19, MCOMPAT_LIB_MINER_TYPE_T1, chain_num, chip_num);
+	sys_platform_init(PLATFORM_NEXELL_SPI, MCOMPAT_LIB_MINER_TYPE_T1, chain_num, chip_num);
 
 	for (i = 0; i < MAX_CHAIN_NUM; i++) {
 		if (chain_plug[i] != 1)
@@ -664,9 +668,9 @@ void T1_detect(bool hotplug)
 //	g_type = dragonmint_get_miner_type();
 
 	// FIXME: get correct hwver and chain num to init platform
-	sys_platform_init(PLATFORM_ZYNQ_HUB_G19, MCOMPAT_LIB_MINER_TYPE_T1, MAX_CHAIN_NUM, MAX_CHIP_NUM);
+	sys_platform_init(PLATFORM_NEXELL_SPI, MCOMPAT_LIB_MINER_TYPE_T1, MAX_CHAIN_NUM, MAX_CHIP_NUM);
 
-	applog(LOG_NOTICE, "vid type detected: %d", misc_get_vid_type());
+//	applog(LOG_NOTICE, "vid type detected: %d", misc_get_vid_type());
 
 	// set fan speed high to get to a lower startup temperature
 	dm_fanctrl_set_fan_speed(T1_FANSPEED_INIT);
@@ -683,6 +687,7 @@ void T1_detect(bool hotplug)
 		}
 	}
 
+#if 0
 	/* If hardware version is g19, continue init cgminer. Else power off*/
 	if (HARDWARE_VERSION_G19 == g_hwver) {
 		applog(LOG_INFO, "The hardware version is G19");
@@ -705,6 +710,7 @@ void T1_detect(bool hotplug)
 		write_miner_ageing_status(AGEING_HW_VERSION_ERROR);
 		return;
 	}
+#endif
 
 	for(i = 0; i < MAX_CHAIN_NUM; ++i) {
 		int pll = DEFAULT_PLL;
@@ -722,8 +728,8 @@ void T1_detect(bool hotplug)
 	}
 
 	if (detect_T1_chain()) {
-		if (misc_get_vid_type() == MCOMPAT_LIB_VID_I2C_TYPE)
-			set_timeout_on_i2c(30);
+//		if (misc_get_vid_type() == MCOMPAT_LIB_VID_I2C_TYPE)
+//			set_timeout_on_i2c(30);
 		applog(LOG_WARNING, "T1 detect finish");
 	}
 }
@@ -860,7 +866,7 @@ static void T1_set_optimal_vid(struct T1_chain *t1, int cid)
 	t1->optimalVid = vid;
 	t1->VidOptimal = true;
 
-	mcompat_set_vid_by_step(cid, t1->iVid, vid);
+//	mcompat_set_vid_by_step(cid, t1->iVid, vid);
 	t1->iVid = vid;
 
 	get_voltages(t1);
@@ -1019,6 +1025,7 @@ static void T1_tune(struct T1_chain *t1, int cid)
 		return;
 	}
 
+#if 0
 	if (t1->VidOptimal)
 		goto tune_freq;
 
@@ -1051,6 +1058,7 @@ static void T1_tune(struct T1_chain *t1, int cid)
 	return;
 
 tune_freq:
+#endif
 	best = T1_best_pll_product(t1);
 	offset = t1->pll - T1_PLL_TUNE_MIN;
 	t1->pllproduct[offset] = product;
@@ -1214,10 +1222,6 @@ static int64_t T1_scanwork(struct thr_info *thr)
 			continue;
 		}
 
-		if (chip_id < 1 || chip_id > t1->num_active_chips) {
-			applog(LOG_WARNING, "%d: wrong chip_id %d", cid, chip_id);
-			continue;
-		}
 		if (job_id < 1 || job_id > 4) {
 			applog(LOG_WARNING, "%d: chip %d: result has wrong ""job_id %d", cid, chip_id, job_id);
 			continue;
@@ -1288,9 +1292,10 @@ static int64_t T1_scanwork(struct thr_info *thr)
 	}
 
 	/* Clean spi buffer before read 0a reg */
-	hub_spi_clean_chain(cid);
+//	hub_spi_clean_chain(cid);
 
-	if (thr->work_restart || mcompat_cmd_read_register(cid, MAX_CHIP_NUM >> 1, reg, REG_LENGTH)) {
+	if (thr->work_restart || mcompat_cmd_read_register(cid, 1, reg, REG_LENGTH))
+	{
 		uint8_t qstate = reg[9] & 0x03;
 
 		/* Clear counter */
@@ -1416,7 +1421,7 @@ static void T1_shutdown(struct thr_info *thr)
 	t1_set_pll(t1, CMD_ADDR_BROADCAST, 0);
 
 	/* Set a very low voltage */
-	mcompat_set_vid_by_step(cid, t1->iVid, T1_VID_MAX);
+//	mcompat_set_vid_by_step(cid, t1->iVid, T1_VID_MAX);
 
 	/* Confirm we have actually reset the chains */
 	if (!mcompat_set_reset(cid, 0)) {
@@ -1466,7 +1471,7 @@ static struct api_data *T1_api_stats(struct cgpu_info *cgpu)
 	ROOT_ADD_API(double, "Voltage Max", s_reg_ctrl.highest_vol[t1->chain_id], false);
 	ROOT_ADD_API(double, "Voltage Min", s_reg_ctrl.lowest_vol[t1->chain_id], false);
 	ROOT_ADD_API(double, "Voltage Avg", s_reg_ctrl.average_vol[t1->chain_id], false);
-	ROOT_ADD_API(bool, "VidOptimal", t1->VidOptimal, false);
+//	ROOT_ADD_API(bool, "VidOptimal", t1->VidOptimal, false);
 	ROOT_ADD_API(bool, "pllOptimal", t1->pllOptimal, false);
 	ROOT_ADD_API(int, "Chain num", cgpu->chainNum, false);
 	ROOT_ADD_API(double, "MHS av", cgpu->mhs_av, false);

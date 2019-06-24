@@ -12,6 +12,7 @@
 MCOMPAT_CHAIN_T s_chain_ops;
 MCOMPAT_CHAIN_T* s_chain_ops_p = &s_chain_ops;
 
+static struct spi_ctx g_nx_spi[MCOMPAT_CONFIG_MAX_CHAIN_NUM];
 
 void init_mcompat_chain(void)
 {
@@ -36,6 +37,13 @@ void init_mcompat_chain(void)
 			s_chain_ops_p->power_on_all     = opi_chain_power_on_all;
 			s_chain_ops_p->power_down_all   = opi_chain_power_down_all;
 			break;
+		case PLATFORM_NEXELL_SPI:
+			s_chain_ops_p->power_on         = opi_chain_power_on;
+			s_chain_ops_p->power_down       = opi_chain_power_down;
+			s_chain_ops_p->hw_reset         = opi_chain_hw_reset;
+			s_chain_ops_p->power_on_all     = opi_chain_power_on_all;
+			s_chain_ops_p->power_down_all   = opi_chain_power_down_all;
+			break;
 		default:
 			applog(LOG_ERR, "the platform is undefined !!!");
 			break;
@@ -51,6 +59,7 @@ void exit_mcompat_chain(void)
 		case PLATFORM_ZYNQ_SPI_G19:
 		case PLATFORM_ZYNQ_HUB_G9:
 		case PLATFORM_ZYNQ_HUB_G19:
+		case PLATFORM_NEXELL_SPI:
 			break;
 		case PLATFORM_ORANGE_PI:
 			break;
@@ -199,6 +208,19 @@ void init_mcompat_cmd(void)
 			s_cmd_ops_p->cmd_read_result      = opi_cmd_read_result;
 			s_cmd_ops_p->cmd_write_job        = opi_cmd_write_job;
 			break;
+		case PLATFORM_NEXELL_SPI:
+			init_nx_cmd(g_chain_num);
+			s_cmd_ops_p->set_speed            = nx_set_spi_speed;
+			s_cmd_ops_p->cmd_reset            = nx_cmd_reset;
+			s_cmd_ops_p->cmd_bist_start       = nx_cmd_bist_start;
+			s_cmd_ops_p->cmd_bist_fix         = nx_cmd_bist_fix;
+			s_cmd_ops_p->cmd_bist_collect     = nx_cmd_bist_collect;
+			s_cmd_ops_p->cmd_read_register    = nx_cmd_read_register;
+			s_cmd_ops_p->cmd_write_register   = nx_cmd_write_register;
+			s_cmd_ops_p->cmd_read_write_reg0d = nx_cmd_read_write_reg0d;
+			s_cmd_ops_p->cmd_read_result      = nx_cmd_read_result;
+			s_cmd_ops_p->cmd_write_job        = nx_cmd_write_job;
+			break;
 		default:
 			applog(LOG_ERR, "the platform is undefined !!!");
 			break;
@@ -213,6 +235,9 @@ void exit_mcompat_cmd(void)
 		case PLATFORM_ZYNQ_SPI_G9:
 		case PLATFORM_ZYNQ_SPI_G19:
 			exit_spi_cmd(g_chain_num);
+			break;
+		case PLATFORM_NEXELL_SPI:
+			exit_nx_cmd(g_chain_num);
 			break;
 		case PLATFORM_ZYNQ_HUB_G9:
 		case PLATFORM_ZYNQ_HUB_G19:
@@ -487,6 +512,8 @@ void mcompat_fan_speed_set(unsigned char fan_id, int speed)
 	int type = 0;
 	int duty = 0;
 
+	if (g_platform == PLATFORM_NEXELL_SPI)
+		return;
 	type = misc_get_vid_type();
 	switch(type)
 	{
@@ -662,6 +689,15 @@ void init_mcompat_gpio(void)
 			s_gpio_ops_p->get_plug      = opi_get_plug;
 			s_gpio_ops_p->set_vid       = opi_set_vid;
 			break;
+		case PLATFORM_NEXELL_SPI:
+			init_nx_gpio(g_chain_num);
+			s_gpio_ops_p->set_power_en  = nx_set_power_en;
+			s_gpio_ops_p->set_start_en  = nx_set_start_en;
+			s_gpio_ops_p->set_reset     = nx_set_reset;
+			s_gpio_ops_p->set_led       = nx_set_led;
+			s_gpio_ops_p->get_plug      = nx_get_plug;
+			s_gpio_ops_p->set_vid       = nx_set_vid;
+			break;
 		default:
 			applog(LOG_ERR, "the platform is undefined !!!");
 			break;
@@ -675,6 +711,9 @@ void exit_mcompat_gpio(void)
 		case PLATFORM_ZYNQ_SPI_G9:
 		case PLATFORM_ZYNQ_SPI_G19:
 			exit_spi_gpio(g_chain_num);
+			break;
+		case PLATFORM_NEXELL_SPI:
+			exit_nx_gpio(g_chain_num);
 			break;
 		case PLATFORM_ZYNQ_HUB_G9:
 		case PLATFORM_ZYNQ_HUB_G19:
@@ -876,6 +915,8 @@ void init_mcompat_pwm(void)
 		case PLATFORM_ORANGE_PI:
 			s_pwm_ops_p->set_pwm    = opi_set_pwm;
 			break;
+		case PLATFORM_NEXELL_SPI:
+			break;
 		default:
 			applog(LOG_ERR, "the platform is undefined !!!");
 			break;
@@ -891,6 +932,8 @@ void exit_mcompat_pwm(void)
 			break;
 		case PLATFORM_ZYNQ_HUB_G9:
 		case PLATFORM_ZYNQ_HUB_G19:
+			break;
+		case PLATFORM_NEXELL_SPI:
 			break;
 		default:
 			applog(LOG_ERR, "the platform is undefined !!!");
@@ -995,6 +1038,7 @@ bool mcompat_get_chain_temp(unsigned char chain_id, c_temp *chain_tmp)
 	return true;
 }
 
+#if 0
 void mcompat_get_chip_temp(int chain_id, int *chip_temp)
 {
 	int chip_id;
@@ -1010,6 +1054,47 @@ void mcompat_get_chip_temp(int chain_id, int *chip_temp)
 			chip_temp[chip_id - 1] = mcompat_temp_to_centigrade(0x000003ff & ((reg[7] << 8) | reg[8]));
 	}
 }
+#else
+static int start_chip_id_temp = 1;
+#define READ_TEMP_CHIP_NO 4
+static int temp_first_flag = 1;
+void mcompat_get_chip_temp(int chain_id, int *chip_temp)
+{
+	int chip_id;
+	unsigned char reg[REG_LENGTH] = {0};
+
+	if(temp_first_flag) {
+		for (chip_id = 1; chip_id <= g_chip_num; chip_id++) {
+			if (!mcompat_cmd_read_register(chain_id, chip_id, reg, REG_LENGTH)) {
+				applog(LOG_ERR, "failed to read temperature for chain%d chip%d",
+					chain_id, chip_id);
+				chip_temp[chip_id - 1] = mcompat_temp_to_centigrade(0);
+				break;
+			} else {
+				chip_temp[chip_id - 1] = mcompat_temp_to_centigrade(0x000003ff & ((reg[7] << 8) | reg[8]));
+			}
+		}
+		temp_first_flag = 0;
+	}
+	else {
+		int ii;
+		for (ii = 0; ii < READ_TEMP_CHIP_NO; ii++) {
+			chip_id = (start_chip_id_temp + ii)%g_chip_num;
+			if (!mcompat_cmd_read_register(chain_id, chip_id, reg, REG_LENGTH)) {
+				applog(LOG_ERR, "failed to read temperature for chain%d chip%d",
+					chain_id, chip_id);
+				chip_temp[chip_id - 1] = mcompat_temp_to_centigrade(0);
+				break;
+			} else {
+				chip_temp[chip_id - 1] = mcompat_temp_to_centigrade(0x000003ff & ((reg[7] << 8) | reg[8]));
+				applog(LOG_ERR, "%d temperature for chain%d chip%d", chip_temp[chip_id - 1],
+					chain_id, chip_id);
+			}
+		}
+		start_chip_id_temp = chip_id + 1;
+	}
+}
+#endif
 
 #define MCOMPAT_WATCHDOG_DEV               ("/dev/watchdog0")
 
@@ -1620,6 +1705,46 @@ int mcompat_find_chain_vid(int chain_id, int chip_num, int vid_start, double vol
 #define SYSFS_GPIO_VAL_LOW                      ("0")
 #define SYSFS_GPIO_VAL_HIGH                     ("1")
 
+int zynq_gpio_dir_read(int pin)
+{
+	int  fd = 0;
+	int  val = 0;
+	ssize_t read_bytes = 0;
+	char fpath[BUF_MAX] = {'\0'};
+	char fvalue[BUF_MAX] = {'\0'};
+
+	memset(fpath, 0, sizeof(fpath));
+	sprintf(fpath, SYSFS_GPIO_DIR_STR, pin);
+	fd = open(fpath, O_RDONLY);
+	if (-1 == fd)
+	{
+		applog(LOG_ERR, "%s,%d: (%s)%s.", __FILE__, __LINE__, fpath, strerror(errno));
+	}
+	memset(fvalue, 0, sizeof(fvalue));
+	read_bytes = read(fd, fvalue, 1);
+	if (-1 == read_bytes)
+	{
+		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+	}
+	close(fd);
+
+	if ('i' == fvalue[0])
+	{
+		val = 0;
+	}
+	else if ('o' == fvalue[0])
+	{
+		val = 1;
+	}
+	else
+	{
+		applog(LOG_ERR, "%s,%d: (%s) is unknown(%s).", __FILE__, __LINE__, fpath, fvalue);
+		val = -1;
+	}
+
+	return val;
+}
+
 void zynq_gpio_init(int pin, int dir)
 {
 	int fd = 0;
@@ -1630,21 +1755,22 @@ void zynq_gpio_init(int pin, int dir)
 	fd = open(SYSFS_GPIO_EXPORT, O_WRONLY);
 	if (-1 == fd)
 	{
-		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+		applog(LOG_ERR, "%s,%d: (%s)%s.", __FILE__, __LINE__, SYSFS_GPIO_EXPORT, strerror(errno));
 	}
 	memset(fvalue, 0, sizeof(fvalue));
 	sprintf(fvalue, "%d", pin);
 	write_bytes = write(fd, fvalue, strlen(fvalue));
 	if (-1 == write_bytes)
 	{
-		if (EBUSY == errno)
+		if (EBUSY != errno)
 		{
-			close(fd);
-			return;
+			applog(LOG_ERR, "%s,%d: pin(%d) %d,%s.", __FILE__, __LINE__, pin, errno, strerror(errno));
+//			close(fd);
+//			return;
 		}
 		else
 		{
-			applog(LOG_ERR, "%s,%d: %d,%s.", __FILE__, __LINE__, errno, strerror(errno));
+			applog(LOG_ERR, "%s,%d: pin(%d) %d,%s.", __FILE__, __LINE__, pin, errno, strerror(errno));
 		}
 	}
 	close(fd);
@@ -1654,7 +1780,7 @@ void zynq_gpio_init(int pin, int dir)
 	fd = open(fpath, O_WRONLY);
 	if (-1 == fd)
 	{
-		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+		applog(LOG_ERR, "%s,%d: (%s)%s.", __FILE__, __LINE__, fpath, strerror(errno));
 	}
 	if (0 == dir)
 	{
@@ -1673,7 +1799,6 @@ void zynq_gpio_init(int pin, int dir)
 		}
 	}
 	close(fd);
-
 	return;
 }
 
@@ -1688,20 +1813,22 @@ static bool zynq_gpio_write(int pin, int val)
 	sprintf(fpath, SYSFS_GPIO_VAL_STR, pin);
 	fd = open(fpath, O_WRONLY);
 	if (-1 == fd) {
-		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+		applog(LOG_ERR, "%s,%d: (%s)%s.", __FILE__, __LINE__, fpath, strerror(errno));
 		goto out;
 	}
 
 	if (0 == val) {
 		write_bytes = write(fd, SYSFS_GPIO_VAL_LOW, sizeof(SYSFS_GPIO_VAL_LOW));
 		if (-1 == write_bytes) {
-			applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+			applog(LOG_ERR, "%s,%d: (%s)%s.", __FILE__, __LINE__, fpath, strerror(errno));
+			applog(LOG_ERR, "%d pin direction is %d", pin, zynq_gpio_dir_read(pin));
 			goto out_close;
 		}
 	} else {
 		write_bytes = write(fd, SYSFS_GPIO_VAL_HIGH, sizeof(SYSFS_GPIO_VAL_HIGH));
 		if (-1 == write_bytes) {
-			applog(LOG_ERR, "%s,%d: %s,%s.", __FILE__, __LINE__, fpath, strerror(errno));
+			applog(LOG_ERR, "%s,%d: (%s)%s.", __FILE__, __LINE__, fpath, strerror(errno));
+			applog(LOG_ERR, "%d pin direction is %d", pin, zynq_gpio_dir_read(pin));
 			goto out_close;
 		}
 	}
@@ -1725,7 +1852,7 @@ int zynq_gpio_read(int pin)
 	fd = open(fpath, O_RDONLY);
 	if (-1 == fd)
 	{
-		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+		applog(LOG_ERR, "%s,%d: (%s)%s.", __FILE__, __LINE__, fpath, strerror(errno));
 	}
 	memset(fvalue, 0, sizeof(fvalue));
 	read_bytes = read(fd, fvalue, 1);
@@ -2807,14 +2934,10 @@ void hub_spi_clean_chain(uint32_t spi_id)
 	uint8_t spi_tx[MCOMPAT_CONFIG_MAX_CMD_LENGTH] = {0};
 	uint8_t spi_rx[MCOMPAT_CONFIG_MAX_CMD_LENGTH] = {0};
 
-	spi_tx[0] = CMD_RESET;
-	spi_tx[1] = CMD_ADDR_BROADCAST;
-	spi_tx[2] = 0xff;
-	spi_tx[3] = 0xff;
+	spi_tx[0] = 0xff;
+	spi_tx[1] = 0xff;
 
-	do_spi_cmd(spi_id, spi_tx, spi_rx, 0x10001000);
-
-	hub_spi_reset(spi_id);
+    mcompat_cmd_reset(spi_id, CMD_ADDR_BROADCAST, spi_tx, spi_rx);
 }
 
 void hub_set_spi_speed(uint8_t spi_id, int select)
@@ -4106,6 +4229,836 @@ void spi_set_spi_speed(unsigned char __maybe_unused chain_id, int index)
 	zynq_set_spi_speed(cfg[index]);
 }
 
+/* ////////////////////////////////////////////////////////////////////////// */
+/* // nexell //////////////////////////////////////////////////////////////// */
+
+void nx_send_data_in_word(struct spi_ctx *spi, unsigned char *buf, int len)
+{
+	int i;
+
+	for(i = 0; i < len; i = i + 2)
+	{
+		nx_spi_xfer(spi, buf + i, 2, NULL, 0);
+	}
+}
+
+void nx_recv_data_in_word(struct spi_ctx *spi, unsigned char *buf, int len)
+{
+	int i;
+
+	for(i = 0; i < len; i = i + 2)
+	{
+		nx_spi_xfer(spi, NULL, 0, buf + i, 2);
+	}
+}
+
+void nx_send_data(struct spi_ctx *spi, unsigned char *buf, int len)
+{
+	nx_spi_xfer(spi, buf, len, NULL, 0);
+}
+
+void nx_recv_data(struct spi_ctx *spi, unsigned char *buf, int len)
+{
+	nx_spi_xfer(spi, NULL, 0, buf, len);
+}
+
+bool nx_send_command(struct spi_ctx *nx_spi, unsigned char cmd, unsigned char chip_id, unsigned char *buff, int len)
+{
+	int tx_len, ret;
+	unsigned char tx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+
+	if ((len > 0) && (buff == NULL))
+	{
+		applog(LOG_ERR, "%s,%d: para error !", __FILE__, __LINE__);
+		return false;
+	}
+
+	memset(tx_buf, 0, sizeof(tx_buf));
+	memset(rx_buf, 0, sizeof(rx_buf));
+
+	tx_buf[0] = cmd;
+	tx_buf[1] = chip_id;
+
+	if (len > 0)
+	{
+		memcpy(tx_buf + 2, buff, len);
+	}
+
+	tx_len = (2 + len + 1) & ~1;
+	ret = nx_spi_xfer(nx_spi, tx_buf, tx_len, rx_buf, tx_len);
+
+	return ret;
+}
+
+
+bool nx_poll_result(struct spi_ctx *nx_spi, unsigned char cmd, unsigned char __maybe_unused chip_id, unsigned char *buff, int len)
+{
+	int i;
+	int max_len;
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+
+	max_len = g_chip_num * 4*10;
+	memset(rx_buf, 0, sizeof(rx_buf));
+
+	for(i = 0; i < max_len; i = i + 2)
+	{
+		nx_recv_data(nx_spi, rx_buf, 2);
+		if ((rx_buf[0] & 0x0f) == cmd)
+		{
+			break;
+		}
+	}
+
+	if (i >= max_len)
+	{
+		applog(LOG_ERR, "%s,%d: poll fail !", __FILE__, __LINE__);
+		return false;
+	}
+
+	nx_spi_xfer(nx_spi, NULL, 0, rx_buf+2, len);
+	memcpy(buff, rx_buf, len+2);
+
+	return true;
+}
+
+const int nx_pin_power_en[] =
+{
+	0,
+	16
+};
+
+const int nx_pin_start_en[] =
+{
+	126,
+	131
+};
+
+const int nx_pin_reset[] =
+{
+	127,
+	132
+};
+
+const int nx_pin_plug[] =
+{
+	24,
+	11
+};
+
+static int gpio_inited = 0;
+void init_nx_gpio(int chain_num)
+{
+	int i;
+
+	if(gpio_inited) return;
+	for(i = 0; i < chain_num; i++)
+	{
+		zynq_gpio_init(nx_pin_power_en[i], 0);
+		zynq_gpio_init(nx_pin_start_en[i], 0);
+		zynq_gpio_init(nx_pin_reset[i], 0);
+		zynq_gpio_init(nx_pin_plug[i], 1);
+	}
+
+	if(chain_num == 0) {
+		system("echo timer > /sys/class/leds/green/trigger");
+	}
+	else {
+		system("echo timer > /sys/class/leds/red/trigger");
+	}
+	gpio_inited = 1;
+}
+
+void exit_nx_gpio(int chain_num)
+{
+	int i;
+
+	for(i = 0; i < chain_num; i++)
+	{
+		zynq_gpio_exit(nx_pin_power_en[i]);
+		zynq_gpio_exit(nx_pin_start_en[i]);
+		zynq_gpio_exit(nx_pin_reset[i]);
+		zynq_gpio_exit(nx_pin_plug[i]);
+	}
+}
+
+void nx_set_power_en(unsigned char chain_id, int val)
+{
+	zynq_gpio_write(nx_pin_power_en[chain_id], val);
+}
+
+void nx_set_start_en(unsigned char chain_id, int val)
+{
+	zynq_gpio_write(nx_pin_start_en[chain_id], val);
+}
+
+bool nx_set_reset(unsigned char chain_id, int val)
+{
+	return zynq_gpio_write(nx_pin_reset[chain_id], val);
+}
+
+void nx_set_led(unsigned char chain_id, int val)
+{
+	if(chain_id == 0) {
+		if(val) {
+			system("echo 100 > /sys/class/leds/green/delay_off");
+			system("echo   0 > /sys/class/leds/green/delay_on");
+		}
+		else {
+			system("echo   0 > /sys/class/leds/green/delay_off");
+			system("echo 100 > /sys/class/leds/green/delay_on");
+		}
+	}
+	else {
+		if(val) {
+			system("echo 100 > /sys/class/leds/red/delay_off");
+			system("echo   0 > /sys/class/leds/red/delay_on");
+		}
+		else {
+			system("echo   0 > /sys/class/leds/red/delay_off");
+			system("echo 100 > /sys/class/leds/red/delay_on");
+		}
+	}
+}
+
+int nx_get_plug(unsigned char chain_id)
+{
+	return (zynq_gpio_read(nx_pin_plug[chain_id]));
+}
+
+bool nx_set_vid(unsigned char chain_id, int vid)
+{
+	//TODO
+#if 0
+	if (g_platform == PLATFORM_ZYNQ_SPI_G19)
+	{
+		zynq_gpio_g19_vid_set(chain_id, vid);
+	}
+	else if (g_platform == PLATFORM_ZYNQ_SPI_G9)
+	{
+		if (s_vid != vid)
+		{
+			zynq_gpio_g9_vid_set(vid);
+		}
+	}
+	else
+	{
+		applog(LOG_ERR, "platform[%d] error in set vid ", g_platform);
+		return false;
+	}
+#endif
+
+	return true;
+}
+
+bool nx_chain_power_on(unsigned char chain_id)
+{
+	applog(LOG_DEBUG, "%s,%d: %s ", __FILE__, __LINE__, __FUNCTION__);
+	/* it's not used */
+
+	return true;
+}
+
+
+bool nx_chain_power_down(unsigned char chain_id)
+{
+	applog(LOG_DEBUG, "%s,%d: %s ", __FILE__, __LINE__, __FUNCTION__);
+
+	mcompat_set_power_en(chain_id, 0);
+
+	return true;
+}
+
+bool nx_chain_hw_reset(unsigned char chain_id)
+{
+	applog(LOG_DEBUG, "%s,%d: %s ", __FILE__, __LINE__, __FUNCTION__);
+	/* it's not used */
+
+	return true;
+}
+
+
+bool nx_chain_power_on_all(void)
+{
+	int i;
+
+	for(i = 0; i < g_chain_num; i++)
+	{
+		nx_chain_power_on(i);
+	}
+
+	return true;
+}
+
+bool nx_chain_power_down_all(void)
+{
+	int i;
+
+	for(i = 0; i < g_chain_num; i++)
+	{
+		nx_chain_power_down(i);
+	}
+
+	return true;
+}
+
+
+#define DEV_TEMPLATE                ("/dev/spidev%d.%d")
+
+void nx_spi_clock_init(void)
+{
+	// TODO
+}
+
+void nx_spi_init(struct spi_ctx *spi, int bus)
+{
+	char dev_fname[BUF_MAX] = {'\0'};
+	int fd = 0;
+	uint8_t mode   = MCOMPAT_CONFIG_SPI_DEFAULT_MODE;
+	uint32_t speed = MCOMPAT_CONFIG_SPI_DEFAULT_SPEED;
+	uint8_t bits   = MCOMPAT_CONFIG_SPI_DEFAULT_BITS_PER_WORD;
+
+	if( spi->config.speed )
+		speed = spi->config.speed;
+	nx_spi_clock_init();
+
+	sprintf(dev_fname, DEV_TEMPLATE, bus, MCOMPAT_CONFIG_SPI_DEFAULT_CS_LINE);
+	fd = open(dev_fname, O_RDWR);
+	if (-1 == fd)
+	{
+		applog(LOG_ERR, "%s,%d: (%s)%s.", __FILE__, __LINE__, dev_fname, strerror(errno));
+	}
+
+	if (ioctl(fd, SPI_IOC_WR_MODE, &mode) < 0)
+	{
+		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+	}
+	if (ioctl(fd, SPI_IOC_RD_MODE, &mode) < 0)
+	{
+		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+	}
+	if (ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits) < 0)
+	{
+		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+	}
+	if (ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &bits) < 0)
+	{
+		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+	}
+	if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed) < 0)
+	{
+		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+	}
+	if (ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed) < 0)
+	{
+		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+	}
+
+	spi->fd = fd;
+	spi->config.bus = bus;
+	spi->config.mode = mode;
+	spi->config.speed = speed;
+	spi->config.bits = bits;
+
+//	applog(LOG_DEBUG, "SPI '%s': mode=%hhu, bits=%hhu, speed=%u ",
+//		    dev_fname, mode, bits, speed);
+	applog(LOG_ERR, "SPI '%s': mode=%hhu, bits=%hhu, speed=%u ",
+		    dev_fname, mode, bits, speed);
+	return;
+}
+
+void nx_spi_exit(struct spi_ctx *spi)
+{
+	if (NULL == spi)
+	{
+		applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+	}
+
+	close(spi->fd);
+
+	return;
+}
+
+void nx_set_spi_speed(unsigned char chain_id, int index)
+{
+	uint32_t cfg[] = {390625, 781250, 1562500, 3125000, 6250000, 9960000};
+
+	struct spi_ctx *nx_spi = &g_nx_spi[chain_id];
+	int fd = nx_spi->fd;
+	uint32_t speed = cfg[index];
+
+	if(fd) {
+		if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed) < 0)
+		{
+			applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+		}
+		if (ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &speed) < 0)
+		{
+			applog(LOG_ERR, "%s,%d: %s.", __FILE__, __LINE__, strerror(errno));
+		}
+	}
+
+	nx_spi->config.speed = speed;
+}
+
+static int spi_bus_for_chain[2] = {0, 2};
+bool init_nx_cmd(int chain_num)
+{
+	int i;
+
+	for(i = 0; i < chain_num; i++)
+	{
+		memset((void*)&g_nx_spi[i], 0, sizeof(struct spi_ctx));
+		nx_spi_init(&g_nx_spi[i], spi_bus_for_chain[i]);
+	}
+
+	return true;
+}
+
+bool exit_nx_cmd(int chain_num)
+{
+	int i;
+
+	for(i = 0; i < chain_num; i++)
+	{
+		nx_spi_exit(&g_nx_spi[i]);
+	}
+
+	return true;
+}
+
+bool nx_cmd_reset(unsigned char chain_id, unsigned char chip_id, unsigned char *in, unsigned char *out)
+{
+	struct spi_ctx *nx_spi = &g_nx_spi[chain_id];
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+
+	applog(LOG_DEBUG, "%s,%d: %s[chain%d] ", __FILE__, __LINE__, __FUNCTION__, chain_id);
+
+	if( !nx_send_command(nx_spi, CMD_RESET, chip_id, in, 2))
+	{
+		applog(LOG_WARNING, "%s(%d) send fail !", __FUNCTION__, __LINE__);
+		return false;
+	}
+
+	memset(rx_buf, 0, sizeof(rx_buf));
+	if (!nx_poll_result(nx_spi, CMD_RESET, chip_id, rx_buf, 2))
+	{
+		applog(LOG_WARNING, "%s (chain=%d, chip=%d) poll fail !", __FUNCTION__, chain_id, chip_id);
+		return false;
+	}
+
+	memcpy(out, rx_buf, 4);
+
+	return true;
+}
+
+int nx_cmd_bist_start(unsigned char chain_id, unsigned char chip_id)
+{
+	struct spi_ctx *nx_spi = &g_nx_spi[chain_id];
+	unsigned char tx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+
+	applog(LOG_DEBUG, "%s,%d: %s[chain%d] ", __FILE__, __LINE__, __FUNCTION__, chain_id);
+
+	if( !nx_send_command(nx_spi, CMD_BIST_START, chip_id, tx_buf, 2))
+	{
+		applog(LOG_WARNING, "%s(%d) send fail !", __FUNCTION__, __LINE__);
+		return -1;
+	}
+
+	memset(rx_buf, 0, sizeof(tx_buf));
+	if (!nx_poll_result(nx_spi, CMD_BIST_START, chip_id, rx_buf, 2))
+	{
+		applog(LOG_WARNING, "%s poll fail !", __FUNCTION__);
+		return -1;
+	}
+
+	return rx_buf[3];
+}
+
+bool nx_cmd_bist_collect(unsigned char chain_id, unsigned char chip_id)
+{
+	struct spi_ctx *spi = &g_nx_spi[chain_id];
+	unsigned char tx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+
+	applog(LOG_DEBUG, "%s,%d: %s[chain%d] ", __FILE__, __LINE__, __FUNCTION__, chain_id);
+
+	memset(tx_buf, 0, sizeof(tx_buf));
+	if (!nx_send_command(spi, CMD_BIST_COLLECT, chip_id, tx_buf, 2))
+	{
+		applog(LOG_WARNING, "%s send fail !", __FUNCTION__);
+		return false;
+	}
+
+	memset(rx_buf, 0, sizeof(rx_buf));
+	if (!nx_poll_result(spi, CMD_BIST_COLLECT, chip_id, rx_buf, 2))
+	{
+		applog(LOG_WARNING, "%s poll fail !", __FUNCTION__);
+		return false;
+	}
+
+	return true;
+}
+
+
+bool nx_cmd_bist_fix(unsigned char chain_id, unsigned char chip_id)
+{
+	struct spi_ctx *spi = &g_nx_spi[chain_id];
+	unsigned char tx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+
+	applog(LOG_DEBUG, "%s,%d: %s[chain%d] ", __FILE__, __LINE__, __FUNCTION__, chain_id);
+
+	memset(tx_buf, 0, sizeof(tx_buf));
+	if (!nx_send_command(spi, CMD_BIST_FIX, chip_id, tx_buf, 2))
+	{
+		applog(LOG_WARNING, "%s send fail !", __FUNCTION__);
+		return false;
+	}
+
+	memset(rx_buf, 0, sizeof(rx_buf));
+	if (!nx_poll_result(spi, CMD_BIST_FIX, chip_id, rx_buf, 2))
+	{
+		applog(LOG_WARNING, "%s poll fail !", __FUNCTION__);
+		return false;
+	}
+
+	return true;
+}
+
+
+bool nx_cmd_write_register(unsigned char chain_id, unsigned char chip_id, unsigned char *reg, int len)
+{
+	int i;
+	unsigned short crc;
+	struct spi_ctx *spi = &g_nx_spi[chain_id];
+	unsigned char tx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char tmp_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+
+	applog(LOG_DEBUG, "%s,%d: %s[chain%d] ", __FILE__, __LINE__, __FUNCTION__, chain_id);
+
+	if (reg == NULL)
+	{
+		applog(LOG_ERR, "%s para error !", __FUNCTION__);
+		return false;
+	}
+
+	memset(tx_buf, 0, sizeof(tx_buf));
+	memset(rx_buf, 0, sizeof(rx_buf));
+	tx_buf[0] = CMD_WRITE_REG;
+	tx_buf[1] = chip_id;
+	memcpy(tx_buf + 2, reg, len);
+	for(i = 0; i < len + 2; i = i + 2)
+	{
+		tmp_buf[i + 0] = tx_buf[i + 1];
+		tmp_buf[i + 1] = tx_buf[i + 0];
+	}
+	crc = CRC16_2(tmp_buf, len + 2);
+	tx_buf[2 + len + 0] = (unsigned char)((crc >> 8) & 0xff);
+	tx_buf[2 + len + 1] = (unsigned char)((crc >> 0) & 0xff);
+
+	nx_spi_xfer(spi, tx_buf, len + 4, rx_buf, len + 4);
+//	nx_send_data(spi, tx_buf, len + 4);
+	for(i=2; i< (len+4); i+=2) {
+		if(rx_buf[i] == CMD_WRITE_REG) return true;
+	}
+
+	memset(rx_buf, 0, sizeof(rx_buf));
+	if (!nx_poll_result(spi, CMD_WRITE_REG, chip_id, rx_buf, len))
+	{
+		applog(LOG_WARNING, "%s poll fail !", __FUNCTION__);
+		return false;
+	}
+
+	return true;
+}
+
+
+bool nx_cmd_read_register(unsigned char chain_id, unsigned char chip_id, unsigned char *reg, int len)
+{
+	int i;
+	int max_len;
+	unsigned short crc1, crc2;
+	struct spi_ctx *spi = &g_nx_spi[chain_id];
+	unsigned char tx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char tmp_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+
+	applog(LOG_DEBUG, "%s,%d: %s[chain%d] ", __FILE__, __LINE__, __FUNCTION__, chain_id);
+
+	if (reg == NULL)
+	{
+		applog(LOG_ERR, "%s para error !", __FUNCTION__);
+		return false;
+	}
+
+	memset(tx_buf, 0, sizeof(tx_buf));
+	if (!nx_send_command(spi, CMD_READ_REG, chip_id, tx_buf, 0))
+	{
+		applog(LOG_WARNING, "%s send fail !", __FUNCTION__);
+		return false;
+	}
+
+	max_len = g_chip_num * 4;
+	memset(rx_buf, 0, sizeof(rx_buf));
+
+	for(i = 0; i < max_len; i = i + 2)
+	{
+		nx_recv_data(spi, rx_buf, 2);
+		if (rx_buf[0] == RESP_READ_REG)
+		{
+			break;
+		}
+	}
+
+	if (i >= max_len)
+	{
+		applog(LOG_WARNING, "%s poll fail !", __FUNCTION__);
+		return false;
+	}
+
+	nx_recv_data_in_word(spi, rx_buf + 2, len + 2);
+
+	for(i = 0; i < len + 2; i = i + 2)
+	{
+		tmp_buf[i + 0] = rx_buf[i + 1];
+		tmp_buf[i + 1] = rx_buf[i + 0];
+	}
+	crc1 = CRC16_2(tmp_buf, len + 2);
+	crc2 = (rx_buf[2 + len + 0] << 8) + (rx_buf[2 + len + 1] << 0);
+
+	if (crc1 != crc2) {
+		applog(LOG_WARNING, "%s crc error !", __FUNCTION__);
+		return false;
+	}
+
+	memcpy(reg, rx_buf + 2, len);
+
+	return true;
+}
+
+
+bool nx_cmd_read_write_reg0d(unsigned char chain_id, unsigned char chip_id, unsigned char *in, int len, unsigned char *out)
+{
+	int i;
+	int max_len;
+	unsigned short crc;
+	unsigned short crc1, crc2;
+	struct spi_ctx *spi = &g_nx_spi[chain_id];
+	unsigned char tx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char tmp_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char *rxp = NULL;
+
+	applog(LOG_DEBUG, "%s,%d: %s[chain%d] ", __FILE__, __LINE__, __FUNCTION__, chain_id);
+
+	if ((in == NULL) || (out == NULL))
+	{
+		applog(LOG_ERR, "%s para error !", __FUNCTION__);
+		return false;
+	}
+
+	memset(tx_buf, 0, sizeof(tx_buf));
+	memset(rx_buf, 0, sizeof(rx_buf));
+	tx_buf[0] = CMD_WRITE_REG0d;
+	tx_buf[1] = chip_id;
+	memcpy(tx_buf + 2, in, len);
+	for(i = 0; i < len + 2; i = i + 2)
+	{
+		tmp_buf[i + 0] = tx_buf[i + 1];
+		tmp_buf[i + 1] = tx_buf[i + 0];
+	}
+	crc = CRC16_2(tmp_buf, len + 2);
+	tx_buf[2 + len + 0] = (unsigned char)((crc >> 8) & 0xff);
+	tx_buf[2 + len + 1] = (unsigned char)((crc >> 0) & 0xff);
+
+	nx_spi_xfer(spi, tx_buf, len + 4, rx_buf, len + 4);
+//	nx_send_data(spi, tx_buf, len + 4);
+	for(i=2; i< (len+4); i+=2) {
+		if(rx_buf[i] == CMD_WRITE_REG0d) {
+			rxp = &rx_buf[i];
+			break;
+		}
+	}
+
+	if (i >= (len+4)) {
+		max_len = g_chip_num * 4;
+		memset(rx_buf, 0, sizeof(rx_buf));
+
+		for(i = 0; i < max_len; i = i + 2)
+		{
+			nx_recv_data(spi, rx_buf, 2);
+			if ((rx_buf[0] & 0x0f) == CMD_WRITE_REG0d)
+			{
+				break;
+			}
+		}
+
+		if (i >= max_len)
+		{
+			applog(LOG_WARNING, "%s poll fail !", __FUNCTION__);
+			return false;
+		}
+		rxp = &rx_buf[0];
+
+		nx_recv_data_in_word(spi, rxp + 2, len + 2);
+	}
+	else {
+		nx_recv_data_in_word(spi, rx_buf + len + 4, i);
+	}
+
+
+	for(i = 0; i < len + 2; i = i + 2)
+	{
+		tmp_buf[i + 0] = rxp[i + 1];
+		tmp_buf[i + 1] = rxp[i + 0];
+	}
+	crc1 = CRC16_2(tmp_buf, len + 2);
+	crc2 = (rxp[2 + len + 0] << 8) + (rxp[2 + len + 1] << 0);
+
+	if (crc1 != crc2) {
+		applog(LOG_WARNING, "%s crc error !, rx_buf = %p, rxp = %p", __FUNCTION__, rx_buf, rxp);
+		hexdump("", rx_buf, 2*(len + 2));
+		return false;
+	}
+
+	memcpy(out, rxp + 2, len);
+
+	return true;
+}
+
+
+bool nx_cmd_read_result(unsigned char chain_id, unsigned char chip_id, unsigned char *res, int len)
+{
+	int i;
+	int max_len;
+	unsigned short crc1, crc2;
+	struct spi_ctx *spi = &g_nx_spi[chain_id];
+	unsigned char tx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char rx_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char tmp_buf[MCOMPAT_CONFIG_MAX_CMD_LENGTH];
+	unsigned char *rxp = NULL;
+
+	applog(LOG_DEBUG, "%s,%d: %s[chain%d] len=%d", __FILE__, __LINE__, __FUNCTION__, chain_id, len);
+
+	if (res == NULL)
+	{
+		applog(LOG_ERR, "%s para error !", __FUNCTION__);
+		return false;
+	}
+
+#if 0
+	memset(tx_buf, 0, sizeof(tx_buf));
+	if (!nx_send_command(spi, CMD_READ_RESULT, chip_id, tx_buf, 2))
+	{
+		applog(LOG_WARNING, "%s send fail !", __FUNCTION__);
+		return false;
+	}
+
+#else
+	memset(tx_buf, 0, sizeof(tx_buf));
+	memset(rx_buf, 0, sizeof(rx_buf));
+	tx_buf[0] = CMD_READ_RESULT;
+	tx_buf[1] = chip_id;
+
+	nx_spi_xfer(spi, tx_buf, 4, rx_buf, 4);
+	for(i=0; i<4; i++) {
+		if (((rx_buf[i+0] & 0x0f) == CMD_READ_RESULT) && (rx_buf[i+1] != 0))
+			rxp = &rx_buf[i];
+	}
+#endif
+
+	if(g_chip_num == 1)
+		max_len = g_chip_num * 4 * 66;
+	else
+		max_len = g_chip_num * 4;
+
+	if(rxp == NULL) {
+		memset(rx_buf, 0, sizeof(rx_buf));
+		for(i = 0; i < max_len; i = i + 2)
+		{
+			nx_recv_data(spi, rx_buf, 2);
+			if ((rx_buf[0] == CMD_READ_RESULT) && (rx_buf[1] == chip_id))
+			{
+				//applog(LOG_DEBUG, "%s no nonce (0x%02x 0x%02x)!", __FUNCTION__, rx_buf[0], rx_buf[1]);
+				return false;
+			}
+			if (((rx_buf[0] & 0x0f) == CMD_READ_RESULT) && (rx_buf[1] != 0))
+			{
+				//applog(LOG_DEBUG, "%s nonce????????????? (0x%02x 0x%02x)!", __FUNCTION__, rx_buf[0], rx_buf[1]);
+				break;
+			}
+		}
+
+		if (i >= max_len)
+		{
+			//applog(LOG_DEBUG, "%s length %d >= %d !", __FUNCTION__, i, max_len);
+			return false;
+		}
+
+		nx_recv_data_in_word(spi, rx_buf + 2, len + 2);
+
+		for(i = 0; i < len + 2; i = i + 2)
+		{
+			tmp_buf[i + 0] = rx_buf[i + 1];
+			tmp_buf[i + 1] = rx_buf[i + 0];
+		}
+		crc1 = CRC16_2(tmp_buf, len + 2);
+		crc2 = (rx_buf[2 + len + 0] << 8) + (rx_buf[2 + len + 1] << 0);
+
+		if (crc1 != crc2) {
+			applog(LOG_WARNING, "%s crc error !", __FUNCTION__);
+			hexdump("", rx_buf, len + 2);
+			return false;
+		}
+
+		memcpy(res, rx_buf, len + 2);
+
+		return true;
+	}
+
+	nx_recv_data_in_word(spi, rxp + 2, len + 2);
+	for(i = 0; i < len + 2; i = i + 2)
+	{
+		tmp_buf[i + 0] = rxp[i + 1];
+		tmp_buf[i + 1] = rxp[i + 0];
+	}
+	crc1 = CRC16_2(tmp_buf, len + 2);
+	crc2 = (rxp[2 + len + 0] << 8) + (rxp[2 + len + 1] << 0);
+
+	if (crc1 != crc2) {
+		applog(LOG_WARNING, "%s crc error ! (rxp = %p, rx_buf = %p)", __FUNCTION__, rxp, rx_buf);
+		hexdump("", rx_buf, len + 4);
+		return false;
+	}
+
+	memcpy(res, rxp, len + 2);
+
+	return true;
+}
+
+
+bool nx_cmd_write_job(unsigned char chain_id, unsigned char chip_id, unsigned char *job, int len)
+{
+	struct spi_ctx *spi = &g_nx_spi[chain_id];
+
+	applog(LOG_DEBUG, "%s,%d: %s(%d, %d, %p, %d)", __FILE__, __LINE__, __FUNCTION__, chain_id, chip_id, job, len);
+
+	if (job == NULL)
+	{
+		applog(LOG_ERR, "%s para error !", __FUNCTION__);
+		return false;
+	}
+
+	nx_send_data(spi, job, len);
+
+	return true;
+}
+
+/* ////////////////////////////////////////////////////////////////////////// */
+/* // nexell end //////////////////////////////////////////////////////////// */
 
 bool zynq_chain_power_on(unsigned char chain_id)
 {
@@ -5614,6 +6567,60 @@ int spi_close(int fd)
 	return (close(fd));
 }
 
+int nx_spi_xfer(struct spi_ctx *nx_spi, uint8_t *tx_buf, uint8_t tx_len, uint8_t *rx_buf, uint8_t rx_len)
+{
+	int ret, ii;
+	struct spi_ioc_transfer spi_message;
+	char strline[512], strw[4];
+	int fd = nx_spi->fd;
+
+	memset(&spi_message, 0, sizeof(spi_message));
+
+	if(tx_len > rx_len)
+		spi_message.len = tx_len;
+	else
+		spi_message.len = rx_len;
+
+	if(tx_buf) {
+		spi_message.tx_buf = (unsigned long)tx_buf;
+	}
+
+	if(rx_buf) {
+		memset(rx_buf, 0xff, rx_len);
+		spi_message.rx_buf = (unsigned long)rx_buf;
+	}
+
+	spi_message.speed_hz      = nx_spi->config.speed;
+
+	spi_message.bits_per_word = nx_spi->config.bits;
+	spi_message.cs_change     = 1;
+	spi_message.delay_usecs   = nx_spi->config.delay;
+
+	ret = ioctl(fd, SPI_IOC_MESSAGE(1), &spi_message);
+
+	if(tx_buf) {
+		memset(strline, 0, 512);
+		memset(strw, 0, 4);
+		for(ii=0; ii<tx_len; ii++) {
+			sprintf(strw, "%02x ", tx_buf[ii]);
+			strcat(strline, strw);
+		}
+		applog(LOG_DEBUG, "TX | %s", strline);
+	}
+
+	if(rx_buf) {
+		memset(strline, 0, 512);
+		memset(strw, 0, 4);
+		for(ii=0; ii<rx_len; ii++) {
+			sprintf(strw, "%02x ", rx_buf[ii]);
+			strcat(strline, strw);
+		}
+		applog(LOG_DEBUG, "RX | %s", strline);
+	}
+
+	return ret;
+}
+
 int spi_xfer(int fd, uint8_t *tx_buf, uint8_t tx_len, uint8_t *rx_buf, uint8_t rx_len)
 {
 	struct spi_ioc_transfer spi_message[2];
@@ -5835,6 +6842,7 @@ bool sys_platform_init(int platform, int miner_type, int chain_num, int chip_num
 		case PLATFORM_ZYNQ_HUB_G9:
 		case PLATFORM_ZYNQ_HUB_G19:
 		case PLATFORM_SOC:
+		case PLATFORM_NEXELL_SPI:
 			break;
 		default:
 			applog(LOG_ERR, "the platform is undefined !!! ");
